@@ -1,0 +1,17 @@
+# Caddy reverse proxy and automatic SSL routing rules
+
+{$API_DOMAIN:api.yourdomain.com} {
+    # Reverse proxy incoming requests to the FastAPI backend container
+    reverse_proxy fastapi:8000
+    
+    # Enable gzip/zstd compression
+    encode gzip zstd
+}
+
+{$N8N_DOMAIN:n8n.yourdomain.com} {
+    # Reverse proxy incoming requests to the n8n container
+    reverse_proxy n8n:5678
+    
+    # Enable gzip/zstd compression
+    encode gzip zstd
+}

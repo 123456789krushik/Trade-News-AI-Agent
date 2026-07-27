@@ -1,0 +1,158 @@
+{
+  "name": "TradeFlow AI REST Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger-node",
+      "name": "Schedule Trigger (Daily 8 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/run-news-agent",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"query\": \"stocks\",\n  \"threshold\": 0.45\n}",
+        "options": {
+          "responseFormat": "json"
+        }
+      },
+      "id": "http-request-node",
+      "name": "Trigger FastAPI Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        470,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$env.TELEGRAM_CHAT_ID}}",
+        "text": "=🟢 <b>TradeFlow AI Daily Market Report</b>\nConsolidated Sentiment: <b>{{$json.market_sentiment}}</b>\n\n{{$json.overall_summary}}\n\n<b>Impacted Companies:</b>\n{{$json.impacted_companies.map(c => `• <b>${c.ticker}</b> (${c.company_name}): ${c.sentiment} (${c.sentiment_score > 0 ? '+' : ''}${c.sentiment_score.toFixed(2)}) | Risk: ${c.risk_level}/10\\n  <i>${c.reasoning}</i>`).join('\\n')}}\n\n<b>Trending Sectors:</b> {{$json.trending_sectors.join(', ')}}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "telegram-alert-node",
+      "name": "Send Telegram Update",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        140
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-creds-id",
+          "name": "Telegram Bot Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "subscriber_email@gmail.com",
+        "subject": "=TradeFlow AI Daily Market Report - {{new Date().toISOString().split('T')[0]}}",
+        "html": "=<h3>TradeFlow AI Daily Market Pulse</h3>\n<p><b>Consolidated Sentiment:</b> {{$json.market_sentiment}}</p>\n<p>{{$json.overall_summary}}</p>\n\n<h4>Impacted Companies</h4>\n<table border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; font-family: sans-serif; font-size: 13px;\">\n  <thead>\n    <tr style=\"background-color: #f1f5f9;\">\n      <th>Ticker</th>\n      <th>Company</th>\n      <th>Sentiment</th>\n      <th>Risk</th>\n      <th>Key Takeaway</th>\n    </tr>\n  </thead>\n  <tbody>\n    {{$json.impacted_companies.map(c => `\n    <tr>\n      <td><b>${c.ticker}</b></td>\n      <td>${c.company_name}</td>\n      <td>${c.sentiment} (${c.sentiment_score.toFixed(2)})</td>\n      <td>${c.risk_level}/10</td>\n      <td>${c.reasoning}</td>\n    </tr>\n    `).join('')}}\n  </tbody>\n</table>\n\n<h4>Trending Sectors</h4>\n<p>{{$json.trending_sectors.join(', ')}}</p>\n<br/>\n<small>Generated automatically by TradeFlow AI FastAPI REST Backend</small>",
+        "options": {}
+      },
+      "id": "email-alert-node",
+      "name": "Send Gmail Report",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        340
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-creds-id",
+          "name": "Gmail Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{$env.TELEGRAM_CHAT_ID}}",
+        "text": "❌ <b>TradeFlow AI Workflow Failure</b>\n\nDaily news collection or analysis job failed on self-hosted FastAPI worker. Check uvicorn console logs for details.",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "failure-notify-node",
+      "name": "Telegram Failure Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        470,
+        450
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-creds-id",
+          "name": "Telegram Bot Credentials"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Daily 8 AM)": {
+      "main": [
+        [
+          {
+            "node": "Trigger FastAPI Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger FastAPI Backend": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Update",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Gmail Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram Failure Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionTimeout": 300
+  },
+  "versionId": "f90111aa-22bb-33cc-dddd-eeeefffaaa12",
+  "id": "tradeflow-decoupled-automation",
+  "meta": {
+    "instanceId": "local-n8n-instance"
+  }
+}
