@@ -1,0 +1,68 @@
+name: Daily Ingest Trigger
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  trigger-agent-and-alert:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Call FastAPI backend on Render and save the JSON response
+      - name: Trigger TradeFlow AI API
+        run: |
+          curl -X POST "https://trade-news-ai-agent.onrender.com/run-news-agent" \
+            -H "accept: application/json" \
+            -H "Content-Type: application/json" \
+            -d '{"query": "stocks", "threshold": 0.45}' > report.json
+          
+          # Print output for log verification
+          cat report.json
+
+      # 2. Parse response data using jq
+      - name: Parse Report Data
+        id: parse_data
+        run: |
+          SUMMARY=$(jq -r '.overall_summary' report.json)
+          SENTIMENT=$(jq -r '.market_sentiment' report.json)
+          SECTORS=$(jq -r '.trending_sectors | join(", ")' report.json)
+          
+          # Format variables for GitHub Actions steps
+          echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
+          echo "sentiment=$SENTIMENT" >> $GITHUB_OUTPUT
+          echo "sectors=$SECTORS" >> $GITHUB_OUTPUT
+
+      # 3. Send Telegram Notification
+      - name: Send Telegram Notification
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: html
+          message: |
+            🟢 <b>TradeFlow AI Daily Market Report</b>
+            Sentiment: <b>${{ steps.parse_data.outputs.sentiment }}</b>
+            
+            ${{ steps.parse_data.outputs.summary }}
+            
+            <b>Trending Sectors:</b> ${{ steps.parse_data.outputs.sectors }}
+
+      # 4. Send Gmail Email Report
+      - name: Send Gmail Report
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: TradeFlow AI Daily Market Report
+          to: krushikgorani@gmail.com
+          from: TradeFlow AI Agent
+          html_body: |
+            <h3>TradeFlow AI Daily Market Pulse</h3>
+            <p><b>Consolidated Sentiment:</b> ${{ steps.parse_data.outputs.sentiment }}</p>
+            <p>${{ steps.parse_data.outputs.summary }}</p>
+            <p><b>Trending Sectors:</b> ${{ steps.parse_data.outputs.sectors }}</p>
+            <br/>
+            <small>Generated automatically by TradeFlow AI FastAPI REST Backend</small>
