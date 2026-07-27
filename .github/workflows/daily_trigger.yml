@@ -33,22 +33,7 @@ jobs:
           echo "sentiment=$SENTIMENT" >> $GITHUB_OUTPUT
           echo "sectors=$SECTORS" >> $GITHUB_OUTPUT
 
-      # 3. Send Telegram Notification
-      - name: Send Telegram Notification
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          format: html
-          message: |
-            🟢 <b>TradeFlow AI Daily Market Report</b>
-            Sentiment: <b>${{ steps.parse_data.outputs.sentiment }}</b>
-            
-            ${{ steps.parse_data.outputs.summary }}
-            
-            <b>Trending Sectors:</b> ${{ steps.parse_data.outputs.sectors }}
-
-      # 4. Send Gmail Email Report
+      # 3. Send Gmail Email Report
       - name: Send Gmail Report
         uses: dawidd6/action-send-mail@v3
         with:
